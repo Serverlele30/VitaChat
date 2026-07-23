@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VitaChat Web</title>
+<style>
+  :root {
+    --bg:        #0e121a;
+    --header:    #141a26;
+    --card:      #1a212e;
+    --accent:    #2d7dff;
+    --accent-dk: #1c54b4;
+    --bubble-in: #2c3442;
+    --text:      #ebf0f8;
+    --subtext:   #8c98aa;
+    --online:    #3cd282;
+    --offline:   #5a6473;
+    --error:     #ff5f5f;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    height: 100vh; overflow: hidden;
+  }
+  button { font: inherit; cursor: pointer; border: 0; }
+  input {
+    font: inherit; border: 0; outline: 0;
+    background: var(--card); color: var(--text);
+    border-radius: 12px; padding: 12px 16px; width: 100%;
+    border-bottom: 3px solid transparent;
+  }
+  input:focus { border-bottom-color: var(--accent); }
+  ::placeholder { color: var(--subtext); }
+
+  /* ---------- Login ---------- */
+  #login {
+    height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+  }
+  #login .box { width: 320px; display: flex; flex-direction: column; gap: 14px; }
+  #login h1 { font-size: 28px; }
+  #login h1 span { color: var(--accent); }
+  #login .sub { color: var(--subtext); margin-bottom: 10px; }
+  .btn {
+    background: var(--accent); color: var(--text);
+    border-radius: 12px; padding: 12px; font-weight: 600;
+  }
+  .btn:hover { background: var(--accent-dk); }
+  .link { background: none; color: var(--subtext); padding: 6px; }
+  .link:hover { color: var(--text); }
+  #login-status { min-height: 20px; font-size: 13px; }
+  #login-status.err { color: var(--error); }
+  #login-status.ok  { color: var(--online); }
+
+  /* ---------- App-Layout ---------- */
+  #app { display: none; height: 100vh; }
+  #app.active { display: flex; }
+
+  #sidebar {
+    width: 280px; min-width: 280px; background: var(--header);
+    display: flex; flex-direction: column; border-right: 2px solid var(--accent);
+  }
+  #sidebar header {
+    padding: 16px; display: flex; justify-content: space-between; align-items: center;
+  }
+  #sidebar header .me { font-weight: 600; }
+  #sidebar header .me small { display: block; color: var(--subtext); font-weight: 400; }
+  #contacts { flex: 1; overflow-y: auto; padding: 8px; }
+  .contact {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  }
+  .contact:hover, .contact.active { background: var(--card); }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bubble-in); color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; flex-shrink: 0;
+  }
+  .contact.active .avatar { background: var(--accent); }
+  .contact .cmeta { flex: 1; min-width: 0; }
+  .contact .crow { display: flex; align-items: center; gap: 7px; }
+  .contact .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contact .ctime { margin-left: auto; font-size: 11px; color: var(--subtext); }
+  .contact .preview {
+    font-size: 12px; color: var(--subtext);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .badge {
+    background: var(--accent); color: var(--text);
+    font-size: 11px; font-weight: 600; min-width: 20px; height: 20px;
+    border-radius: 10px; display: flex; align-items: center;
+    justify-content: center; padding: 0 6px; flex-shrink: 0;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--offline); flex-shrink: 0; }
+  .dot.on { background: var(--online); }
+
+  #chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat-header {
+    background: var(--header); border-bottom: 2px solid var(--accent);
+    padding: 16px 20px; display: flex; align-items: center; gap: 10px;
+  }
+  #chat-header .status { color: var(--subtext); font-size: 13px; }
+
+  #messages {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #messages .empty { color: var(--subtext); margin: auto; }
+  .msg { max-width: 60%; display: flex; flex-direction: column; margin-bottom: 10px; }
+  .msg .bubble {
+    padding: 10px 14px; border-radius: 14px;
+    background: var(--bubble-in); word-wrap: break-word; white-space: pre-wrap;
+  }
+  .msg .time { font-size: 11px; color: var(--subtext); margin-top: 3px; }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg.mine .bubble { background: var(--accent); }
+
+  #composer {
+    display: flex; gap: 10px; padding: 14px 20px 18px;
+  }
+  #composer input { border-radius: 14px; }
+  #composer button {
+    background: var(--accent); color: var(--text);
+    width: 46px; border-radius: 50%; font-size: 18px; flex-shrink: 0;
+  }
+  #composer button:hover { background: var(--accent-dk); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="box">
+    <h1>Vita<span>Chat</span></h1>
+    <div class="sub">Web-Testclient</div>
+    <input id="l-user" placeholder="Benutzername" autocomplete="username">
+    <input id="l-pass" placeholder="Passwort" type="password" autocomplete="current-password">
+    <button class="btn" id="l-login">Anmelden</button>
+    <button class="link" id="l-register">Neu hier? Registrieren</button>
+    <div id="login-status"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <header>
+      <div class="me"><span id="me-name"></span><small>online</small></div>
+      <button class="link" id="logout">Logout</button>
+    </header>
+    <div id="contacts"></div>
+  </div>
+  <div id="chat">
+    <div id="chat-header">
+      <strong id="chat-name">Kontakt w&auml;hlen</strong>
+      <span class="dot" id="chat-dot"></span>
+      <span class="status" id="chat-status"></span>
+    </div>
+    <div id="messages"><div class="empty">W&auml;hle links einen Kontakt aus</div></div>
+    <div id="composer">
+      <input id="c-text" placeholder="Nachricht schreiben ..." disabled>
+      <button id="c-send" disabled>&#10148;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';   // gleiche Domain (Vercel) -> kein CORS-Thema
+
+let token = sessionStorage.getItem('vc_token') || '';
+let myName = sessionStorage.getItem('vc_name') || '';
+let chatWith = '';
+let sinceId = 0;
+let contactTimer = null, msgTimer = null;
+
+const $ = id => document.getElementById(id);
+
+/* ---------- API: zeilenbasiertes Pipe-Protokoll parsen ---------- */
+async function api(path, params = {}, post = false) {
+  const body = new URLSearchParams(params);
+  const res = post
+    ? await fetch(`${API}/${path}`, { method: 'POST', body })
+    : await fetch(`${API}/${path}?${body}`);
+  const text = await res.text();
+  return text.trim().split('\n').filter(Boolean).map(l => l.split('|'));
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+function fmtRel(ts) {
+  const d = new Date(ts * 1000), n = new Date();
+  if (d.toDateString() === n.toDateString())
+    return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+function fmtTime(ts) {
+  return new Date(ts * 1000).toLocaleTimeString('de-DE',
+    { hour: '2-digit', minute: '2-digit' });
+}
+
+/* ---------- Login / Registrieren ---------- */
+function setLoginStatus(msg, isErr) {
+  const el = $('login-status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : 'ok';
+}
+
+async function doLogin() {
+  const user = $('l-user').value.trim(), pass = $('l-pass').value;
+  if (!user || !pass) return setLoginStatus('Name und Passwort eingeben', true);
+  const [line] = await api('login', { user, pass }, true);
+  if (line?.[0] === 'OK') {
+    token = line[1]; myName = user;
+    sessionStorage.setItem('vc_token', token);
+    sessionStorage.setItem('vc_name', myName);
+    enterApp();
+  } else {
+    setLoginStatus(line?.[1] || 'Fehler', true);
+  }
+}
+
+async function doRegister() {
+  const user = $('l-user').value.trim(), pass = $('l-pass').value;
+  if (!user || !pass) return setLoginStatus('Name und Passwort eingeben', true);
+  const [line] = await api('register', { user, pass }, true);
+  if (line?.[0] === 'OK') setLoginStatus('Registriert! Jetzt anmelden.', false);
+  else setLoginStatus(line?.[1] || 'Fehler', true);
+}
+
+function enterApp() {
+  $('login').style.display = 'none';
+  $('app').classList.add('active');
+  $('me-name').textContent = myName;
+  loadContacts();
+  contactTimer = setInterval(loadContacts, 10000);
+}
+
+function doLogout() {
+  sessionStorage.clear();
+  token = ''; chatWith = ''; sinceId = 0;
+  clearInterval(contactTimer); clearInterval(msgTimer);
+  location.reload();
+}
+
+/* ---------- Kontakte ---------- */
+async function loadContacts() {
+  const lines = await api('contacts', { token });
+  const box = $('contacts');
+  box.innerHTML = '';
+  let currentOnline = null;
+
+  for (const l of lines) {
+    if (l[0] !== 'USER') continue;
+    const [, name, online, unread = '0', lastTs = '0', preview = ''] = l;
+    if (name === chatWith) currentOnline = online === '1';
+
+    const div = document.createElement('div');
+    div.className = 'contact' + (name === chatWith ? ' active' : '');
+    div.innerHTML = `
+      <div class="avatar">${esc(name[0].toUpperCase())}</div>
+      <div class="cmeta">
+        <div class="crow"><span class="name">${esc(name)}</span>
+             <span class="dot ${online === '1' ? 'on' : ''}"></span>
+             <span class="ctime">${lastTs > 0 ? fmtRel(+lastTs) : ''}</span></div>
+        <div class="preview">${esc(preview)}</div>
+      </div>
+      ${+unread > 0 ? `<div class="badge">${+unread > 99 ? 99 : unread}</div>` : ''}`;
+    div.onclick = () => openChat(name);
+    box.appendChild(div);
+  }
+  if (!box.children.length)
+    box.innerHTML = '<div style="padding:16px;color:var(--subtext)">Noch keine anderen Nutzer</div>';
+
+  if (currentOnline !== null) {
+    $('chat-dot').className = 'dot' + (currentOnline ? ' on' : '');
+    $('chat-status').textContent = currentOnline ? 'online' : 'offline';
+  }
+}
+
+/* ---------- Chat ---------- */
+function openChat(name) {
+  chatWith = name;
+  sinceId = 0;
+  $('chat-name').textContent = name;
+  $('messages').innerHTML = '';
+  $('c-text').disabled = false;
+  $('c-send').disabled = false;
+  $('c-text').focus();
+  loadContacts();           // Markierung + Online-Status aktualisieren
+  clearInterval(msgTimer);
+  pollMessages();
+  msgTimer = setInterval(pollMessages, 3000);
+}
+
+async function pollMessages() {
+  if (!chatWith) return;
+  const lines = await api('poll', { token, with: chatWith, since: sinceId });
+  const box = $('messages');
+  let added = false;
+
+  for (const l of lines) {
+    if (l[0] !== 'MSG') continue;
+    const id = parseInt(l[1]), from = l[2], ts = parseInt(l[3]);
+    const text = l.slice(4).join('|');       // falls '¦'-ersetzte Pipes doch auftauchen
+    if (id > sinceId) sinceId = id;
+
+    const div = document.createElement('div');
+    div.className = 'msg' + (from === myName ? ' mine' : '');
+    div.innerHTML = `<div class="bubble">${esc(text)}</div>
+                     <div class="time">${fmtTime(ts)}</div>`;
+    box.appendChild(div);
+    added = true;
+  }
+  if (added) box.scrollTop = box.scrollHeight;
+  if (!box.children.length)
+    box.innerHTML = '<div class="empty">Noch keine Nachrichten &ndash; schreib die erste!</div>';
+}
+
+async function sendMessage() {
+  const input = $('c-text');
+  const text = input.value.trim();
+  if (!text || !chatWith) return;
+  input.value = '';
+  const emptyHint = $('messages').querySelector('.empty');
+  if (emptyHint) emptyHint.remove();
+  await api('send', { token, to: chatWith, text }, true);
+  pollMessages();
+}
+
+/* ---------- Events ---------- */
+$('l-login').onclick = doLogin;
+$('l-register').onclick = doRegister;
+$('l-pass').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
+$('logout').onclick = doLogout;
+$('c-send').onclick = sendMessage;
+$('c-text').addEventListener('keydown', e => e.key === 'Enter' && sendMessage());
+
+/* Session wiederherstellen */
+if (token && myName) enterApp();
+</script>
+</body>
+</html>
